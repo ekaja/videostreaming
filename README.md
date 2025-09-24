@@ -327,4 +327,68 @@ pip install flask flask-cors
 REM Ready to go! 🚀
 ```
 
-ทำตามขั้นตอนนี้แล้วจะพร้อมใช้งานครับ! 🎯
+
+## apache reverse proxy
+```
+    # ================== Reverse proxy for Flask video-streaming ==================
+    # ให้ /video-streaming/ ชี้หน้า index ของ Flask
+    ProxyPreserveHost On
+    SSLProxyEngine On
+
+    # ปรับ timeout สำหรับไฟล์ใหญ่/สตรีม
+    ProxyTimeout 600
+    TimeOut 600
+
+    # MIME ที่จำเป็นสำหรับ HLS
+    AddType application/vnd.apple.mpegURL .m3u8
+    AddType video/MP2T                      .ts
+
+    # ไม่บีบอัดวิดีโอ/สตรีม
+    SetEnvIfNoCase Request_URI "\.(mp4|m4v|m3u8|ts|webm)$" no-gzip=1
+
+    # Security headers พื้นฐาน
+    Header always set X-Content-Type-Options "nosniff"
+
+    # ถ้าเข้ามาที่ /video-streaming (ไม่มี / ท้าย) ให้เติม /
+    RedirectMatch 301 ^/video-streaming$ /video-streaming/
+
+    # --- เมานท์แอปที่ prefix /video-streaming/ ---
+    ProxyPass        /video-streaming/  http://127.0.0.1:5000/
+    ProxyPassReverse /video-streaming/  http://127.0.0.1:5000/
+
+    # --- เมานท์เส้นทางที่หน้าเว็บเรียกแบบ absolute (/api, /hls, /player_path, /hlsplayer) ---
+    # เพราะหน้า index ของแอป fetch('/api/...') และเปิด /player_path/... /hls/... โดยเริ่มด้วย /
+    # จึงต้องผูก path เหล่านี้ด้วย เพื่อให้ทำงานแม้อยู่ใต้ /video-streaming/
+    ProxyPass        /api/         http://127.0.0.1:5000/api/         retry=0
+    ProxyPassReverse /api/         http://127.0.0.1:5000/api/
+    ProxyPass        /player_path/ http://127.0.0.1:5000/player_path/ retry=0
+    ProxyPassReverse /player_path/ http://127.0.0.1:5000/player_path/
+    ProxyPass        /hls/         http://127.0.0.1:5000/hls/         retry=0
+    ProxyPassReverse /hls/         http://127.0.0.1:5000/hls/
+    ProxyPass        /hlsplayer/   http://127.0.0.1:5000/hlsplayer/   retry=0
+    ProxyPassReverse /hlsplayer/   http://127.0.0.1:5000/hlsplayer/
+
+    # อนุญาตเมธอดที่จำเป็น และเปิดสิทธิ์
+    <Location /video-streaming/>
+        <LimitExcept GET HEAD OPTIONS>
+            Require all denied
+        </LimitExcept>
+        Require all granted
+    </Location>
+    <Location /api/>
+        <LimitExcept GET HEAD OPTIONS>
+            Require all denied
+        </LimitExcept>
+        Require all granted
+    </Location>
+    <Location /player_path/>
+        Require all granted
+    </Location>
+    <Location /hls/>
+        Require all granted
+    </Location>
+    <Location /hlsplayer/>
+        Require all granted
+    </Location>
+    # =========================================================================== 
+```
